@@ -1,4 +1,4 @@
--- Remplacez VOTRE_EMAIL@gmail.com avant d'exécuter ce script dans Supabase SQL Editor.
+-- Exécutez ce script dans Supabase SQL Editor pour configurer le projet.
 create table if not exists public.invoices (
   id text primary key,
   client_email text,
@@ -15,8 +15,8 @@ drop policy if exists "Admins manage invoices" on public.invoices;
 drop policy if exists "Clients read their invoices" on public.invoices;
 create policy "Admins manage invoices" on public.invoices
   for all to authenticated
-  using (lower(auth.jwt()->>'email') = 'votre.email@gmail.com')
-  with check (lower(auth.jwt()->>'email') = 'votre.email@gmail.com');
+  using (lower(auth.jwt()->>'email') = 'thosane90@gmail.com')
+  with check (lower(auth.jwt()->>'email') = 'thosane90@gmail.com');
 create policy "Clients read their invoices" on public.invoices
   for select to authenticated
   using (lower(client_email) = lower(auth.jwt()->>'email'));
@@ -37,20 +37,20 @@ drop policy if exists "Admins delete invoice files" on storage.objects;
 drop policy if exists "Invoice owners read invoice files" on storage.objects;
 create policy "Admins upload invoice files" on storage.objects
   for insert to authenticated
-  with check (bucket_id = 'invoice-files' and lower(auth.jwt()->>'email') = 'votre.email@gmail.com');
+  with check (bucket_id = 'invoice-files' and lower(auth.jwt()->>'email') = 'thosane90@gmail.com');
 create policy "Admins update invoice files" on storage.objects
   for update to authenticated
-  using (bucket_id = 'invoice-files' and lower(auth.jwt()->>'email') = 'votre.email@gmail.com')
-  with check (bucket_id = 'invoice-files' and lower(auth.jwt()->>'email') = 'votre.email@gmail.com');
+  using (bucket_id = 'invoice-files' and lower(auth.jwt()->>'email') = 'thosane90@gmail.com')
+  with check (bucket_id = 'invoice-files' and lower(auth.jwt()->>'email') = 'thosane90@gmail.com');
 create policy "Admins delete invoice files" on storage.objects
   for delete to authenticated
-  using (bucket_id = 'invoice-files' and lower(auth.jwt()->>'email') = 'votre.email@gmail.com');
+  using (bucket_id = 'invoice-files' and lower(auth.jwt()->>'email') = 'thosane90@gmail.com');
 create policy "Invoice owners read invoice files" on storage.objects
   for select to authenticated
   using (
     bucket_id = 'invoice-files'
     and (
-      lower(auth.jwt()->>'email') = 'votre.email@gmail.com'
+      lower(auth.jwt()->>'email') = 'thosane90@gmail.com'
       or exists (
         select 1 from public.invoices i
         where i.id = split_part(name, '/', 1)
