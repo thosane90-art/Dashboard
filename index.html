@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="fr"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Factures proforma</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<style>
+:root{--bg:#f6f4ef;--card:#fff;--tx:#1d2a24;--mu:#6b7770;--ac:#0f6b4f;--ac2:#e8a33d;--bd:#e2ded4;--danger:#b3412f;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#121815;--card:#1b2420;--tx:#e9efe9;--mu:#93a39a;--ac:#3fbf93;--ac2:#e8a33d;--bd:#2c3832;--danger:#e57a66}}
+:root[data-theme="dark"]{--bg:#121815;--card:#1b2420;--tx:#e9efe9;--mu:#93a39a;--ac:#3fbf93;--ac2:#e8a33d;--bd:#2c3832;--danger:#e57a66}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif}
+header{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--bd)}
+h1{font:700 20px Georgia,serif;margin:0}h2{font:600 15px system-ui;margin:0 0 10px}
+main{display:grid;grid-template-columns:260px 1fr;gap:16px;padding:16px 20px;max-width:1300px;margin:auto}
+@media(max-width:820px){main{grid-template-columns:1fr}}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:14px}
+button{font:inherit;cursor:pointer;border:1px solid var(--bd);background:var(--card);color:var(--tx);border-radius:8px;padding:7px 12px}
+button.p{background:var(--ac);border-color:var(--ac);color:#fff}button.d{color:var(--danger)}
+button:hover{filter:brightness(.95)}
+.inv{padding:10px;border:1px solid var(--bd);border-radius:8px;margin-bottom:8px;cursor:pointer}
+.inv.on{border-color:var(--ac);box-shadow:0 0 0 1px var(--ac)}.inv b{display:block}.inv small{color:var(--mu)}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:14px}
+.kpi small{color:var(--mu);display:block}.kpi strong{font-size:20px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px;margin-bottom:14px}
+.cv{position:relative;height:250px}
+.acts{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px}
+.tw{overflow-x:auto}table{border-collapse:collapse;width:100%;min-width:560px}
+th,td{padding:6px 8px;border-bottom:1px solid var(--bd);text-align:left;white-space:nowrap}th{color:var(--mu);font-weight:600;font-size:13px}
+td.n,th.n{text-align:right}tr.sec td{background:var(--bg);font-weight:700;color:var(--ac)}
+dialog{border:1px solid var(--bd);border-radius:14px;background:var(--card);color:var(--tx);width:min(980px,96vw);padding:16px}
+dialog::backdrop{background:#0007}
+.f{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin-bottom:12px}
+label{font-size:12px;color:var(--mu);display:block}
+input,select{width:100%;font:inherit;padding:6px 8px;border:1px solid var(--bd);border-radius:6px;background:var(--bg);color:var(--tx)}
+td input,td select{min-width:70px}
+#msg{color:var(--mu);font-size:13px;min-height:18px}
+body:not(.in) header,body:not(.in) main{display:none}body.in #login{display:none}#login{max-width:380px;margin:18vh auto;text-align:center;padding:24px}#login button{font:inherit;padding:10px 18px}</style></head><body><div id="login"><h1 style="font:700 22px Georgia,serif">Factures proforma</h1><p style="color:var(--mu)">Connectez-vous avec votre compte Google pour continuer.</p><button class="p" id="gbtn">Se connecter avec Google</button><p id="amsg" style="color:#b3412f;font-size:13px"></p></div>
+<header><h1>Factures proforma</h1><div style="display:flex;gap:8px;flex-wrap:wrap"><button id="tf" onclick="tab='fact';render()">Factures</button><button id="ts" onclick="tab='stats';render()">Statistiques</button><button onclick="bk()">Sauvegarder</button><button onclick="imp.click()">Restaurer</button><button onclick="cfg()">Société</button><input type="file" id="imp" accept=".json" hidden onchange="rs(this)"><button onclick="document.getElementById('invoiceImport').click()">Importer fichier</button><input type="file" id="invoiceImport" multiple hidden onchange="importInvoiceFiles(this.files);this.value=''"><button class="p" onclick="tab='fact';render();openEd()">+ Nouvelle facture</button><span id="who" style="color:var(--mu);align-self:center"></span><button id="out">Déconnexion</button></div></header>
+<main>
+<aside class="card"><h2>Mes factures</h2><input id="srch" placeholder="Rechercher client, n°, date…" oninput="render()" style="margin-bottom:8px"><div id="list"></div></aside>
+<section id="view"></section>
+</main>
+<dialog id="ed"></dialog>
+<script>
+const SEC={pet:'Boissons PET',verre:'Boissons verre',biere:'Bières verre',negoce:'Négoce bière (canettes)'};
+const L=(s,p,f,c,q,pr,cs)=>({s,p,f,c,q,pr,cs:cs||0});
+const mk=t=>t.trim().split('\n').map(r=>{const[a,b,f,c,q,pr]=r.split('|');return L(a,b,+f,+c,+q,+pr,a==='pet'||a==='negoce'?0:c==12?2400:c==16?3200:3600)});
+const T1=`pet|TOP ORANGE|30|12|182|1665
+pet|TOP ANANAS|30|12|182|1665
+pet|TOP TROPICAL|30|12|0|1665
+pet|GAZELLE ANANAS|30|12|0|2400
+pet|GAZELLE POMME|30|12|91|2400
+pet|GAZELLE TONIC|30|12|91|2400
+pet|TOP COLA|30|12|0|1665
+pet|TOP GRENADINE|30|12|0|1665
+pet|YOUZOU|30|12|0|2600
+pet|GAZELLE LIMONADE|30|12|0|2400
+pet|WORLD COLA|30|12|0|2400
+pet|VIMTO PASTEQUE|30|12|0|2800
+pet|VIMTO|30|12|0|2800
+pet|XXL ENERGY|30|12|0|3885
+pet|TOP ORANGE|100|6|0|3389
+pet|TOP ANANAS|100|6|0|3389
+pet|GAZELLE ANANAS|100|6|208|3389
+pet|GAZELLE POMME|100|6|0|3389
+pet|GAZELLE LIMONADE|100|6|0|3389
+pet|WORLD COLA|100|6|0|2800
+pet|TOP COLA|100|6|0|0
+pet|YOUZOU|100|6|0|2800
+pet|VIMTO PASTEQUE|100|6|0|3850
+pet|VIMTO|100|6|208|4179
+pet|VIMTO|125|6|0|4169
+pet|GAZELLE ANANAS|125|6|0|3379
+pet|GAZELLE POMME|125|6|0|3379
+pet|GAZELLE LIMONADE|125|6|0|3379
+pet|WORLD COLA|125|6|0|3379
+verre|GAZELLE ANANAS|30|24|48|4725
+verre|GAZELLE TONIC|30|24|48|4725
+verre|GAZELLE LIMONADE|30|24|96|4725
+verre|GAZELLE ORANGE|30|24|0|4725
+verre|GAZELLE SODA WATER|30|24|0|4725
+verre|YOUZOU|30|24|0|4725
+verre|WORLD COLA|30|24|48|4725
+verre|VIMTO|30|24|0|5775
+verre|XXL ENERGY|33|24|0|5775
+verre|MALTA|35|24|0|5775
+biere|GAZELLE|63|16|0|9900
+biere|GAZELLE|63|12|900|7425
+biere|GAZELLE|33|24|48|9600
+biere|GAZELLE CHILL|33|24|0|7800
+biere|FLAG|33|24|144|11200
+biere|FLAG|65|16|0|11200
+biere|FLAG|65|12|120|8400
+biere|33 EXPORT|50|16|0|8500
+biere|33 EXPORT|50|12|60|6375
+biere|BIDEEW|50|12|0|4400
+biere|BOOSTER RACINES|50|16|60|6880
+biere|BOOSTER RACINES|50|12|0|5160
+biere|BOOSTER WHISKY COLA|33|24|0|0
+negoce|BIERE GAZELLE|50|24|0|12000
+negoce|FLAG|50|24|0|12000
+negoce|BEAUFORT|50|24|0|12000`;
+const T2=`pet|TOP ORANGE|30|12|0|1665
+pet|TOP ANANAS|30|12|0|1665
+pet|TOP TROPICAL|30|12|0|1665
+pet|GAZELLE ANANAS|30|12|0|2400
+pet|GAZELLE POMME|30|12|0|2400
+pet|GAZELLE TONIC|30|12|0|2400
+pet|TOP COLA|30|12|0|1850
+pet|TOP GRENADINE|30|12|0|1665
+pet|YOUZOU|30|12|0|2400
+pet|GAZELLE LIMONADE|30|12|0|2400
+pet|WORLD COLA|30|12|0|2400
+pet|VIMTO|30|12|0|2900
+pet|XXL ENERGY|30|12|0|3886
+pet|TOP ORANGE|100|6|0|2070
+pet|TOP ANANAS|100|6|0|2800
+pet|GAZELLE ANANAS|100|6|0|2800
+pet|GAZELLE POMME|100|6|0|2800
+pet|GAZELLE LIMONADE|100|6|0|2800
+pet|WORLD COLA|100|6|0|2800
+pet|TOP COLA|100|6|0|2300
+pet|YOUZOU|100|6|0|2800
+pet|VIMTO|100|6|0|3850
+pet|VIMTO|125|6|0|4169
+pet|GAZELLE ANANAS|125|6|0|3379
+pet|GAZELLE POMME|125|6|0|3379
+pet|GAZELLE LIMONADE|125|6|0|3379
+pet|WORLD COLA|125|6|0|3379
+verre|GAZELLE ANANAS|30|24|144|4725
+verre|GAZELLE TONIC|30|24|0|4725
+verre|GAZELLE LIMONADE|30|24|0|4725
+verre|GAZELLE ORANGE|30|24|48|4725
+verre|GAZELLE SODA WATER|30|24|0|4725
+verre|YOUZOU|30|24|0|4725
+verre|WORLD COLA|30|24|144|4725
+verre|VIMTO|30|24|0|4725
+verre|XXL ENERGY|33|24|0|0
+verre|MALTA|35|24|0|5775
+biere|GAZELLE|63|16|0|9400
+biere|GAZELLE|63|12|900|7425
+biere|GAZELLE|33|24|240|9600
+biere|BIDEEW|50|12|0|4400
+biere|GAZELLE CHILL|33|24|0|7800
+biere|FLAG|33|24|240|11200
+biere|FLAG|65|16|0|0
+biere|FLAG|65|12|60|8400
+biere|33 EXPORT|50|16|0|8300
+biere|33 EXPORT|50|12|0|6225
+biere|DOPPEL|33|24|0|7600
+biere|BOOSTER RACINES|50|16|0|6800
+biere|BOOSTER RACINES|50|12|0|3825
+biere|BOOSTER WHISKY COLA|33|24|0|0
+negoce|BIERE GAZELLE|50|24|0|14000
+negoce|FLAG|50|24|0|14000
+negoce|BEAUFORT|50|24|0|14000`;
+const SEED=[{id:'seed1',client:'Client exemple A',tel:'',date:'2026-05-06',ch:'',im:'',bn:'',lines:mk(T1)},{id:'seed2',client:'Client exemple B',tel:'',date:'2026-04-16',ch:'',im:'',bn:'',lines:mk(T2)}];
+const CAT=()=>mk(T2).map(l=>({...l,q:0}));
+const nl=n=>{n=Math.round(n);if(!n)return'zéro';const u='-,un,deux,trois,quatre,cinq,six,sept,huit,neuf,dix,onze,douze,treize,quatorze,quinze,seize,dix-sept,dix-huit,dix-neuf'.split(','),t=',,vingt,trente,quarante,cinquante,soixante'.split(',');
+ const b=(n,last)=>{if(n<20)return n?u[n]:'';let d=Math.floor(n/10),r=n%10;if(d<7)return r===0?t[d]:t[d]+(r===1?' et un':'-'+u[r]);if(d===7||d===9){const base=d===7?'soixante':'quatre-vingt',x=r+10;return d===7&&r===1?'soixante et onze':base+'-'+u[x]}return r?'quatre-vingt-'+u[r]:'quatre-vingt'+(last?'s':'')};
+ const k=(n,last)=>{const c=Math.floor(n/100),r=n%100;let s=c>1?u[c]+' cent'+(r===0&&last?'s':''):c===1?'cent':'';if(r)s+=(s?' ':'')+b(r,last);return s};
+ const M=Math.floor(n/1e6),K=Math.floor(n/1e3)%1e3,R=n%1e3,p=[];
+ if(M)p.push(M===1?'un million':k(M,true)+' millions');if(K)p.push(K===1?'mille':k(K,false)+' mille');if(R)p.push(k(R,true));return p.join(' ')};
+const lettres=m=>{const s=nl(m);return s[0].toUpperCase()+s.slice(1)+' francs CFA'};
+let D,cur,ch={};
+D=[];cur=null;
+
+const save=()=>{if(window.sbSave)window.sbSave(D).catch(e=>say('Enregistrement Supabase impossible : '+(e.message||'vérifiez les règles SQL.')))};
+const fmt=n=>Math.round(n).toLocaleString('fr-FR').replace(/[\u202f\u00a0]/g,' ');
+const hl=l=>l.q*l.c*l.f/10000, mt=l=>l.q*l.pr;
+const tot=(i,s)=>i.lines.filter(l=>!s||l.s===s).reduce((a,l)=>({m:a.m+mt(l),h:a.h+hl(l),q:a.q+l.q,c:a.c+l.q*l.cs}),{m:0,h:0,q:0,c:0});
+const get=()=>D.find(i=>i.id===cur)||D[0];
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const css=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+
+function fbLoad(a){D=a.sort((x,y)=>x.date<y.date?1:-1);if(!D.find(i=>i.id===cur))cur=D[0]?D[0].id:null;render()}
+const dlh=async()=>{try{if(window.claude){const d=await claude.use('downloads');if(d)return d}}catch(e){}return{save:async({filename,data})=>{const a=document.createElement('a');a.href=URL.createObjectURL(data);a.download=filename;document.body.appendChild(a);a.click();a.remove()}}};
+let tab='fact',yr=null,per='m';const PN={m:'mensuel',t:'trimestriel',s:'semestriel',a:'annuel'};
+function render(){
+ const S=tab==='stats';document.querySelector('aside').style.display=S?'none':'';document.querySelector('main').style.gridTemplateColumns=S?'1fr':'';tf.className=S?'':'p';ts.className=S?'p':'';if(S)return renderS();
+ if(!D.length){document.getElementById('list').innerHTML='';document.getElementById('view').innerHTML='<div class="card">Aucune facture. Cliquez sur « + Nouvelle facture ».</div>';return}
+ document.getElementById('list').innerHTML=D.filter(i=>(i.client+' '+(i.no||'')+' '+i.date).toLowerCase().includes((srch.value||'').toLowerCase())).map(i=>`<div class="inv ${i.id===cur?'on':''}" onclick="cur='${i.id}';render()"><b>${esc(i.client||'Sans nom')}</b><small>${i.no||''} · ${i.date} · ${fmt(tot(i).m)} FCFA · ${i.st||'brouillon'}</small></div>`).join('');
+ const i=get(),T=tot(i);
+ let rows='';
+ for(const k in SEC){const ls=i.lines.filter(l=>l.s===k&&l.q>0);if(!ls.length)continue;const t=tot(i,k);
+  rows+=`<tr class="sec"><td colspan="3">${SEC[k]}</td><td class="n">${fmt(t.q)}</td><td></td><td class="n">${fmt(t.m)}</td><td class="n">${t.h.toFixed(2)}</td><td class="n">${fmt(t.c)}</td></tr>`+
+  ls.map(l=>`<tr><td>${esc(l.p)}</td><td>${l.f} cl</td><td>${l.c}</td><td class="n">${fmt(l.q)}</td><td class="n">${fmt(l.pr)}</td><td class="n">${fmt(mt(l))}</td><td class="n">${hl(l).toFixed(2)}</td><td class="n">${fmt(l.q*l.cs)}</td></tr>`).join('')}
+ document.getElementById('view').innerHTML=`
+ <div class="acts"><button onclick="openEd('${i.id}')">Modifier</button><button onclick="dup('${i.id}')">Dupliquer</button><select onchange="setSt('${i.id}',this.value)" style="width:auto">${ST.map(s=>`<option ${s===(i.st||'brouillon')?'selected':''}>${s}</option>`).join('')}</select><button class="p" onclick="pdf()">Télécharger PDF</button><button onclick="shareInvoice('${i.id}')">Partager par e-mail</button><button onclick="wa()">WhatsApp</button><button onclick="mail()">Email</button><button class="d" onclick="del('${i.id}')">Supprimer</button></div><div id="msg"></div>
+ <p style="color:var(--mu);margin:0 0 12px">${i.no?i.no+' · ':''}${i.date}${i.val?' · valable '+i.val+' j':''}${i.tel?' · Tél '+esc(i.tel):''}${i.bn?' · Bon N° '+esc(i.bn):''}${i.im?' · Véhicule '+esc(i.im):''}${i.ch?' · Chauffeur '+esc(i.ch):''}</p>
+ <div class="kpis"><div class="card kpi"><small>Client</small><strong>${esc(i.client)}</strong></div><div class="card kpi"><small>Total TTC</small><strong>${fmt(T.m)}</strong></div><div class="card kpi"><small>Casiers/packs</small><strong>${fmt(T.q)}</strong></div><div class="card kpi"><small>Hectolitres</small><strong>${T.h.toFixed(1)}</strong></div><div class="card kpi"><small>Consigne due</small><strong>${fmt(T.c-(i.ret||0))}</strong></div></div>
+ <div class="grid"><div class="card"><h2>Montant par produit (courbe)</h2><div class="cv"><canvas id="c1"></canvas></div></div><div class="card"><h2>Montant par section</h2><div class="cv"><canvas id="c2"></canvas></div></div><div class="card"><h2>Hectolitres par section</h2><div class="cv"><canvas id="c3"></canvas></div></div></div>
+ <div class="card tw"><table><thead><tr><th>Produit</th><th>Format</th><th>Cond.</th><th class="n">Casiers</th><th class="n">Prix TTC</th><th class="n">Montant</th><th class="n">Hectos</th><th class="n">Consigne</th></tr></thead><tbody>${rows}<tr class="sec"><td colspan="3">TOTAL BON DE COMMANDE</td><td class="n">${fmt(T.q)}</td><td></td><td class="n">${fmt(T.m)}</td><td class="n">${T.h.toFixed(2)}</td><td class="n">${fmt(T.c)}</td></tr></tbody></table></div><div class="card" style="margin-top:14px"><small style="color:var(--mu)">Montant en lettres</small><br><b>${lettres(T.m)}</b></div>${i.files&&i.files.length?`<div class="card" style="margin-top:14px"><h2>Documents importés</h2>${i.files.map(f=>`<button onclick="openInvoiceFile('${encodeURIComponent(f.path)}')">Ouvrir ${esc(f.name)}</button>`).join(' ')}</div>`:''}`;
+ charts(i);
+}
+function charts(i){
+ Object.values(ch).forEach(c=>c.destroy());
+ const ac=css('--ac'),a2=css('--ac2'),tx=css('--mu'),bd=css('--bd');
+ const sc={x:{ticks:{color:tx},grid:{color:bd}},y:{ticks:{color:tx},grid:{color:bd}}};
+ const ls=i.lines.filter(l=>mt(l)>0);
+ ch.a=new Chart(c1,{type:'line',data:{labels:ls.map(l=>l.p+' '+l.f),datasets:[{label:'Montant',data:ls.map(mt),borderColor:ac,backgroundColor:ac+'33',fill:true,tension:.3}]},options:{maintainAspectRatio:false,plugins:{legend:{display:false}},scales:sc}});
+ const ks=Object.keys(SEC);
+ ch.b=new Chart(c2,{type:'line',data:{labels:ks.map(k=>SEC[k]),datasets:[{label:'Montant',data:ks.map(k=>tot(i,k).m),borderColor:a2,backgroundColor:a2,tension:.3}]},options:{maintainAspectRatio:false,plugins:{legend:{display:false}},scales:sc}});
+ ch.c=new Chart(c3,{type:'doughnut',data:{labels:ks.map(k=>SEC[k]),datasets:[{data:ks.map(k=>tot(i,k).h),backgroundColor:[ac,a2,'#6b8fd6'],borderWidth:0}]},options:{maintainAspectRatio:false,plugins:{legend:{labels:{color:tx}}}}});
+}
+const say=t=>{const m=document.getElementById('msg');if(m)m.textContent=t};
+function summary(i){const T=tot(i);return `Facture proforma – ${i.client}\nDate : ${i.date}\n`+Object.keys(SEC).map(k=>`${SEC[k]} : ${fmt(tot(i,k).m)} FCFA`).join('\n')+`\nTOTAL TTC : ${fmt(T.m)} FCFA (${T.q} casiers, ${T.h.toFixed(1)} hl)`}
+function wa(){const i=get(),t=encodeURIComponent(summary(i)),n=(i.tel||'').replace(/\D/g,'');window.open(`https://wa.me/${n.length>8?'221'+n.slice(-9):''}?text=${t}`,'_blank');say('Ouverture de WhatsApp… Téléchargez aussi le PDF pour le joindre à la conversation.')}
+function mail(){const i=get();window.open(`mailto:?subject=${encodeURIComponent('Facture proforma – '+i.client)}&body=${encodeURIComponent(summary(i))}`,'_blank');say('Ouverture de votre messagerie… Joignez le PDF téléchargé.')}
+async function pdf(){
+ const i=get(),T=tot(i),doc=new jspdf.jsPDF();
+ doc.setFontSize(15);doc.text('FACTURE PROFORMA – BON DE COMMANDE',14,16);
+ doc.setFontSize(10);doc.text(`Client : ${i.client}   Tél : ${i.tel||''}   Date : ${i.date}   Bon N° : ${i.bn||''}`,14,24);if(CO.n)doc.text(CO.n+(CO.t?'   Tél : '+CO.t:'')+(i.no?'   Proforma N° '+i.no:''),14,20);doc.text(`Chauffeur / permis : ${i.ch||''}   Immatriculation : ${i.im||''}`,14,29);
+ const body=[];
+ for(const k in SEC){const ls=i.lines.filter(l=>l.s===k&&l.q>0);if(!ls.length)continue;const t=tot(i,k);
+  body.push([{content:SEC[k],colSpan:3,styles:{fontStyle:'bold',fillColor:[225,240,233]}},{content:fmt(t.q),styles:{fillColor:[225,240,233],halign:'right'}},'',{content:fmt(t.m),styles:{fillColor:[225,240,233],halign:'right'}},{content:t.h.toFixed(2),styles:{fillColor:[225,240,233],halign:'right'}}]);
+  ls.forEach(l=>body.push([l.p,l.f+' cl',l.c,fmt(l.q),fmt(l.pr),fmt(mt(l)),hl(l).toFixed(2)]))}
+ body.push([{content:'TOTAL BON DE COMMANDE',colSpan:3,styles:{fontStyle:'bold'}},{content:fmt(T.q),styles:{fontStyle:'bold'}},'',{content:fmt(T.m),styles:{fontStyle:'bold'}},{content:T.h.toFixed(2),styles:{fontStyle:'bold'}}]);
+ doc.autoTable({startY:34,head:[['Produit','Format','Cond.','Casiers','Prix TTC','Montant','Hectos']],body,styles:{fontSize:8},headStyles:{fillColor:[15,107,79]},columnStyles:{3:{halign:'right'},4:{halign:'right'},5:{halign:'right'},6:{halign:'right'}}});
+ const y=doc.lastAutoTable.finalY+8;doc.setFontSize(9);doc.text(`Consignation : ${fmt(T.c)} FCFA`,14,y);doc.text('Montant en lettres : '+lettres(T.m),14,y+7,{maxWidth:180});doc.text('Signature et cachet du client',140,y+22);if(CO.p)doc.text('Paiement : '+CO.p,14,y+16,{maxWidth:120});if(CO.c)doc.text(CO.c,14,y+22,{maxWidth:120});if(i.val)doc.text('Offre valable '+i.val+' jours',14,y+30);
+ const name=`proforma_${(i.client||'client').replace(/\W+/g,'_')}_${i.date}.pdf`;
+ try{const d=await dlh();if(!d)throw 0;await d.save({filename:name,data:doc.output('blob')});say('PDF prêt.')}catch(e){say(e&&e.code==='declined'?'Téléchargement annulé.':'Le téléchargement n’est pas disponible dans cette vue.')}
+}
+function del(id){if(D.length<2||!confirm('Supprimer cette facture ?'))return;D=D.filter(i=>i.id!==id);cur=D[0].id;save();render()}
+const MN=['Janv.','Févr.','Mars','Avr.','Mai','Juin','Juil.','Août','Sept.','Oct.','Nov.','Déc.'];
+function stats(y,pr){pr=pr||per;const ks=Object.keys(SEC),labs=pr==='m'?MN:pr==='t'?['T1','T2','T3','T4']:pr==='s'?['S1','S2']:[...new Set(D.map(i=>i.date.slice(0,4)))].sort(),ix=d=>pr==='m'?+d.slice(5,7)-1:pr==='t'?Math.floor((+d.slice(5,7)-1)/3):pr==='s'?(+d.slice(5,7)>6?1:0):labs.indexOf(d.slice(0,4)),ms=labs.map((lab,k)=>({k,lab,n:0,m:0,h:0,q:0,c:0,sec:Object.fromEntries(ks.map(x=>[x,0]))})),sy=Object.fromEntries(ks.map(x=>[x,{m:0,h:0}])),prod={},cli={},csd={};
+ D.filter(i=>pr==='a'||i.date.slice(0,4)==y).forEach(i=>{const o=ms[ix(i.date)],T=tot(i);o.n++;o.m+=T.m;o.h+=T.h;o.q+=T.q;o.c+=T.c;ks.forEach(k=>{const t=tot(i,k);o.sec[k]+=t.m;sy[k].m+=t.m;sy[k].h+=t.h});i.lines.filter(l=>l.q>0).forEach(l=>{const key=l.p+' '+l.f+' cl';prod[key]=(prod[key]||0)+mt(l)});cli[i.client]=(cli[i.client]||0)+T.m;csd[i.client]=(csd[i.client]||0)+T.c-(i.ret||0)});return{ms,sy,prod,cli,csd}}
+function renderS(){
+ const yrs=[...new Set(D.map(i=>i.date.slice(0,4)))].sort().reverse();if(!yr||!yrs.includes(yr))yr=yrs[0];
+ const{ms,sy,prod,cli,csd}=stats(yr),cf=D.filter(i=>(per==='a'||i.date.slice(0,4)===yr)&&['acceptée','payée'].includes(i.st)).reduce((a,i)=>a+tot(i).m,0),A=ms.reduce((a,o)=>({n:a.n+o.n,m:a.m+o.m,h:a.h+o.h,q:a.q+o.q,c:a.c+o.c}),{n:0,m:0,h:0,q:0,c:0});
+ const rows=ms.filter(o=>o.n).map(o=>{const p=ms[o.k-1],v=p&&p.m?((o.m/p.m-1)*100).toFixed(1)+' %':'–';return `<tr><td>${o.lab}</td><td class="n">${o.n}</td><td class="n">${fmt(o.m)}</td><td class="n">${v}</td><td class="n">${fmt(o.q)}</td><td class="n">${o.h.toFixed(1)}</td><td class="n">${fmt(o.c)}</td><td class="n">${fmt(o.m/o.n)}</td></tr>`}).join('');
+ const top=Object.entries(prod).sort((a,b)=>b[1]-a[1]).slice(0,8),cl=Object.entries(cli).sort((a,b)=>b[1]-a[1]),pc=v=>A.m?(v/A.m*100).toFixed(1)+' %':'–';
+ document.getElementById('view').innerHTML=`<div class="acts"><select onchange="per=this.value;render()" style="width:auto">${[['m','Mensuel'],['t','Trimestriel'],['s','Semestriel'],['a','Annuel']].map(([v,t])=>`<option value="${v}" ${v===per?'selected':''}>${t}</option>`).join('')}</select>${per==='a'?'':`<select onchange="yr=this.value;render()" style="width:auto">${yrs.map(y=>`<option ${y===yr?'selected':''}>${y}</option>`).join('')}</select>`}<button onclick="csvS()">Exporter CSV</button><button class="p" onclick="pdfS()">Rapport PDF</button></div><div id="msg"></div>
+ <div class="kpis"><div class="card kpi"><small>Chiffre d’affaires TTC</small><strong>${fmt(A.m)}</strong></div><div class="card kpi"><small>Hectolitres</small><strong>${A.h.toFixed(1)}</strong></div><div class="card kpi"><small>Casiers/packs</small><strong>${fmt(A.q)}</strong></div><div class="card kpi"><small>Consignation</small><strong>${fmt(A.c)}</strong></div><div class="card kpi"><small>Factures</small><strong>${A.n}</strong></div><div class="card kpi"><small>Panier moyen</small><strong>${A.n?fmt(A.m/A.n):'–'}</strong></div><div class="card kpi"><small>CA confirmé (acceptée/payée)</small><strong>${fmt(cf)}</strong></div><div class="card kpi"><small>Objectif mensuel (FCFA)</small><input type="number" value="${OBJ}" onchange="setObj(this.value)"><small>${OBJ?'Réalisé : '+(A.m/(OBJ*12*(per==='a'?yrs.length:1))*100).toFixed(0)+' % de l’objectif annuel':''}</small></div></div>
+ <div class="grid"><div class="card"><h2>Montant et hectolitres par période</h2><div class="cv"><canvas id="s1"></canvas></div></div><div class="card"><h2>Montant par section et par période</h2><div class="cv"><canvas id="s2"></canvas></div></div><div class="card"><h2>Top produits (montant)</h2><div class="cv"><canvas id="s3"></canvas></div></div></div>
+ <div class="card tw" style="margin-bottom:14px"><h2>Suivi ${PN[per]} ${per==='a'?'':yr}</h2><table><thead><tr><th>Période</th><th class="n">Factures</th><th class="n">Montant TTC</th><th class="n">Var. vs période préc.</th><th class="n">Casiers</th><th class="n">Hectos</th><th class="n">Consigne</th><th class="n">Panier moyen</th></tr></thead><tbody>${rows||'<tr><td colspan="8">Aucune facture sur cette année.</td></tr>'}</tbody></table></div>
+ <div class="grid"><div class="card tw"><h2>Par section</h2><table style="min-width:0"><thead><tr><th>Section</th><th class="n">Montant</th><th class="n">Part</th><th class="n">Hectos</th></tr></thead><tbody>${Object.keys(SEC).map(k=>`<tr><td>${SEC[k]}</td><td class="n">${fmt(sy[k].m)}</td><td class="n">${pc(sy[k].m)}</td><td class="n">${sy[k].h.toFixed(1)}</td></tr>`).join('')}</tbody></table></div><div class="card tw"><h2>Par client</h2><table style="min-width:0"><thead><tr><th>Client</th><th class="n">Montant</th><th class="n">Part</th><th class="n">Consigne due</th></tr></thead><tbody>${cl.map(([k,v])=>`<tr><td>${esc(k)}</td><td class="n">${fmt(v)}</td><td class="n">${pc(v)}</td><td class="n">${fmt(csd[k]||0)}</td></tr>`).join('')}</tbody></table></div></div>`;
+ Object.values(ch).forEach(c=>c.destroy());ch={};
+ const ac=css('--ac'),a2=css('--ac2'),tx=css('--mu'),bd=css('--bd'),cols=[ac,a2,'#6b8fd6','#b36bd6'],ax={ticks:{color:tx},grid:{color:bd}},lg={labels:{color:tx}},lb=ms.map(o=>o.lab);
+ ch.s1=new Chart(s1,{data:{labels:lb,datasets:[{type:'bar',label:'Montant TTC',data:ms.map(o=>o.m),backgroundColor:ac,yAxisID:'y'},{type:'line',label:'Hectos',data:ms.map(o=>o.h),borderColor:a2,backgroundColor:a2,tension:.3,yAxisID:'y1'}]},options:{maintainAspectRatio:false,plugins:{legend:lg},scales:{x:ax,y:ax,y1:{position:'right',ticks:{color:tx},grid:{display:false}}}}});
+ ch.s2=new Chart(s2,{type:'bar',data:{labels:lb,datasets:Object.keys(SEC).map((k,n)=>({label:SEC[k],data:ms.map(o=>o.sec[k]),backgroundColor:cols[n]}))},options:{maintainAspectRatio:false,plugins:{legend:lg},scales:{x:{...ax,stacked:true},y:{...ax,stacked:true}}}});
+ ch.s3=new Chart(s3,{type:'bar',data:{labels:top.map(t=>t[0]),datasets:[{data:top.map(t=>t[1]),backgroundColor:ac}]},options:{indexAxis:'y',maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:ax,y:{ticks:{color:tx},grid:{display:false}}}}});
+}
+function dl(n,b){return dlh().then(d=>{if(!d)throw 0;return d.save({filename:n,data:b})}).then(()=>say('Fichier prêt.')).catch(e=>say(e&&e.code==='declined'?'Téléchargement annulé.':'Le téléchargement n’est pas disponible dans cette vue.'))}
+function csvS(){const{ms}=stats(yr),r=[['Période','Factures','Montant TTC','Hectolitres','Casiers','Consignation']].concat(ms.filter(o=>o.n).map(o=>[o.lab,o.n,Math.round(o.m),o.h.toFixed(2),o.q,Math.round(o.c)]));dl(`stats_${per}_${yr}.csv`,new Blob(['\ufeff'+r.map(x=>x.join(';')).join('\n')],{type:'text/csv'}))}
+function pdfS(){const{ms,prod,cli}=stats(yr),doc=new jspdf.jsPDF(),o={styles:{fontSize:9},headStyles:{fillColor:[15,107,79]}};doc.setFontSize(15);doc.text('Statistiques '+PN[per]+(per==='a'?'':' '+yr),14,16);
+ doc.autoTable({...o,startY:22,head:[['Période','Factures','Montant TTC','Hectos','Casiers','Consignation']],body:ms.filter(x=>x.n).map(x=>[x.lab,x.n,fmt(x.m),x.h.toFixed(1),fmt(x.q),fmt(x.c)])});
+ doc.autoTable({...o,startY:doc.lastAutoTable.finalY+8,head:[['Top produits','Montant TTC']],body:Object.entries(prod).sort((a,b)=>b[1]-a[1]).slice(0,10).map(([k,v])=>[k,fmt(v)])});
+ doc.autoTable({...o,startY:doc.lastAutoTable.finalY+8,head:[['Client','Montant TTC']],body:Object.entries(cli).sort((a,b)=>b[1]-a[1]).map(([k,v])=>[k,fmt(v)])});
+ dl(`rapport_${per}_${yr}.pdf`,doc.output('blob'))}
+const ST=['brouillon','envoyée','acceptée','payée'];let OBJ=0,CO={n:'',t:'',p:'',c:''};
+try{OBJ=+localStorage.getItem('obj')||0;Object.assign(CO,JSON.parse(localStorage.getItem('co')||'{}'))}catch(e){}
+function nextNo(d){const y='PRO-'+d.slice(0,4);return y+'-'+String(Math.max(0,...D.filter(i=>i.no&&i.no.startsWith(y)).map(i=>+i.no.slice(-3)))+1).padStart(3,'0')}
+const clients=()=>{const m={};D.forEach(i=>{if(i.client)m[i.client]={client:i.client,tel:i.tel||(m[i.client]&&m[i.client].tel)||''}});return Object.values(m)};
+function fillCl(){const c=clients().find(c=>c.client===E.client);if(c&&!E.tel&&c.tel){E.tel=c.tel;etel.value=c.tel}}
+function setSt(id,v){D.find(i=>i.id===id).st=v;save();render()}
+function dup(id){const s=JSON.parse(JSON.stringify(D.find(i=>i.id===id)));s.id='i'+Date.now();s.date=new Date().toISOString().slice(0,10);s.no=nextNo(s.date);s.st='brouillon';s.ret=0;D.unshift(s);cur=s.id;save();render();say('Facture dupliquée : modifiez-la au besoin.')}
+function setObj(v){OBJ=+v||0;try{localStorage.setItem('obj',OBJ)}catch(e){}render()}
+function bk(){dl('sauvegarde_proforma_'+new Date().toISOString().slice(0,10)+'.json',new Blob([JSON.stringify({D,CO,OBJ})],{type:'application/json'}))}
+function rs(inp){const f=inp.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{try{const o=JSON.parse(r.result);if(!Array.isArray(o.D)||!o.D.length)throw 0;D=o.D;if(o.CO)CO=o.CO;if(o.OBJ)OBJ=o.OBJ;cur=D[0].id;save();render();say('Sauvegarde restaurée.')}catch(e){say('Fichier de sauvegarde invalide.')}};r.readAsText(f);inp.value=''}
+function cfg(){ed.innerHTML=`<h2>Informations société (en-tête du PDF)</h2><div class="f"><div><label>Nom de la société</label><input value="${esc(CO.n)}" oninput="CO.n=this.value"></div><div><label>Téléphone</label><input value="${esc(CO.t)}" oninput="CO.t=this.value"></div><div><label>Paiement (mobile money, RIB)</label><input value="${esc(CO.p)}" oninput="CO.p=this.value"></div><div><label>Conditions de vente</label><input value="${esc(CO.c)}" oninput="CO.c=this.value"></div></div><div class="acts"><button onclick="ed.close()">Fermer</button><button class="p" onclick="try{localStorage.setItem('co',JSON.stringify(CO))}catch(e){};ed.close()">Enregistrer</button></div>`;ed.showModal()}
+let E;
+function openEd(id){
+ E=id?JSON.parse(JSON.stringify(D.find(i=>i.id===id))):{id:'i'+Date.now(),client:'',tel:'',date:new Date().toISOString().slice(0,10),ch:'',im:'',bn:'',st:'brouillon',val:15,ret:0,lines:CAT(),isNew:1};
+ drawEd();ed.showModal();
+}
+function drawEd(){
+ ed.innerHTML=`<h2>${E.isNew?'Nouvelle facture':'Modifier la facture'}</h2>
+ <div class="f"><div><label>Client</label><input list="cl" value="${esc(E.client)}" oninput="E.client=this.value;fillCl()"><datalist id="cl">${clients().map(c=>`<option value="${esc(c.client)}">`).join('')}</datalist></div><div><label>Téléphone</label><input id="etel" value="${esc(E.tel)}" oninput="E.tel=this.value"></div><div><label>Date</label><input type="date" value="${E.date}" oninput="E.date=this.value"></div><div><label>N° bon de commande</label><input value="${esc(E.bn||'')}" oninput="E.bn=this.value"></div><div><label>Chauffeur et N° permis</label><input value="${esc(E.ch||'')}" oninput="E.ch=this.value"></div><div><label>Immatriculation véhicule</label><input value="${esc(E.im||'')}" oninput="E.im=this.value"></div><div><label>Email du client (compte Google)</label><input id="clientEmail" type="email" value="${esc(E.clientEmail||'')}" oninput="E.clientEmail=this.value.trim().toLowerCase()"></div><div><label>Statut</label><select onchange="E.st=this.value">${ST.map(s=>`<option ${s===(E.st||'brouillon')?'selected':''}>${s}</option>`).join('')}</select></div><div><label>Validité (jours)</label><input type="number" value="${E.val||''}" oninput="E.val=+this.value"></div><div><label>Consignes retournées (FCFA)</label><input type="number" value="${E.ret||0}" oninput="E.ret=+this.value"></div></div>
+ <div class="tw" style="max-height:50vh;overflow:auto"><table><thead><tr><th>Section</th><th>Produit</th><th>Format cl</th><th>Cond.</th><th>Casiers</th><th>Prix TTC</th><th>Consigne/casier</th><th></th></tr></thead><tbody>`+
+ E.lines.map((l,n)=>`<tr><td><select onchange="E.lines[${n}].s=this.value">${Object.keys(SEC).map(k=>`<option value="${k}" ${k===l.s?'selected':''}>${SEC[k]}</option>`).join('')}</select></td><td><input value="${esc(l.p)}" oninput="E.lines[${n}].p=this.value"></td>`+
+ ['f','c','q','pr','cs'].map(k=>`<td><input type="number" min="0" value="${l[k]}" oninput="E.lines[${n}].${k}=+this.value"></td>`).join('')+`<td><button class="d" onclick="E.lines.splice(${n},1);drawEd()">×</button></td></tr>`).join('')+
+ `</tbody></table></div><div class="acts" style="margin-top:12px"><button onclick="E.lines.push(L('pet','',30,12,0,0));drawEd()">+ Ligne</button><span style="flex:1"></span><button onclick="ed.close()">Annuler</button><button class="p" onclick="saveEd()">Enregistrer</button></div>`;
+}
+function saveEd(){
+ delete E.isNew;if(!E.no)E.no=nextNo(E.date);const k=D.findIndex(i=>i.id===E.id);if(k<0)D.unshift(E);else D[k]=E;cur=E.id;save();ed.close();render();
+}
+render();
+</script>
+<script type="module">
+import {supabase,ADMINS} from './supabase.js';
+const $=i=>document.getElementById(i);let known={},feed;
+const uid=()=>`i${Date.now()}${Math.random().toString(36).slice(2,8)}`;
+const cleanText=s=>String(s??'').trim();
+const normalized=s=>cleanText(s).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,' ').trim();
+const numeric=v=>{const n=Number(String(v??'').replace(/\s/g,'').replace(',','.').replace(/[^0-9.-]/g,''));return Number.isFinite(n)?n:0};
+function parseDate(v){
+ if(v instanceof Date&&!Number.isNaN(v.getTime()))return v.toISOString().slice(0,10);
+ if(typeof v==='number'&&window.XLSX){const d=XLSX.SSF.parse_date_code(v);if(d)return `${d.y}-${String(d.m).padStart(2,'0')}-${String(d.d).padStart(2,'0')}`}
+ const s=cleanText(v);if(/^\d{4}-\d{2}-\d{2}/.test(s))return s.slice(0,10);
+ const m=s.match(/^(\d{1,2})[/. -](\d{1,2})[/. -](\d{4})$/);return m?`${m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`:new Date().toISOString().slice(0,10);
+}
+const aliases={client:['client','nom client','customer'],email:['email','e mail','courriel'],date:['date','date facture','invoice date'],no:['numero facture','n facture','invoice number','reference'],product:['produit','designation','article','product'],section:['section','categorie','category'],format:['format','volume','cl'],pack:['conditionnement','cond','pack'],quantity:['quantite','qte','casiers','quantity','qty'],price:['prix ttc','prix unitaire','prix','price','montant unitaire'],deposit:['consigne casier','consigne','deposit']};
+function parseSheet(rows){
+ const matches=(header,key)=>aliases[key].some(alias=>header===alias||(alias.length>2&&header.includes(alias)));
+ const isHeader=row=>row.some(cell=>Object.keys(aliases).some(key=>matches(normalized(cell),key)));
+ const headerIndex=rows.findIndex(isHeader);if(headerIndex<0)return null;
+ const header=rows[headerIndex].map(normalized),column=key=>header.findIndex(h=>matches(h,key));
+ if(column('product')<0)return null;
+ const get=(row,key)=>column(key)<0?'':row[column(key)];
+ const lines=[],dataRows=rows.slice(headerIndex+1);let first={};
+ for(const row of dataRows){
+  const product=cleanText(get(row,'product'));if(!product)continue;
+  if(!Object.keys(first).length)first={client:cleanText(get(row,'client')),clientEmail:cleanText(get(row,'email')).toLowerCase(),date:parseDate(get(row,'date')),no:cleanText(get(row,'no'))};
+  const section=normalized(get(row,'section'));
+  const s=section.includes('biere')?'biere':section.includes('negoce')?'negoce':section.includes('verre')?'verre':'pet';
+  lines.push({s,p:product,f:numeric(get(row,'format'))||30,c:numeric(get(row,'pack'))||12,q:numeric(get(row,'quantity')),pr:numeric(get(row,'price')),cs:numeric(get(row,'deposit'))});
+ }
+ return lines.length?{...first,lines}:null;
+}
+function invoiceFrom(data,fileName){
+ const date=parseDate(data?.date),client=cleanText(data?.client)||fileName.replace(/\.[^.]+$/,'');
+ return {id:uid(),client,clientEmail:cleanText(data?.clientEmail).toLowerCase(),tel:cleanText(data?.tel),date,no:cleanText(data?.no),ch:'',im:'',bn:'',st:'brouillon',val:15,ret:0,lines:Array.isArray(data?.lines)?data.lines:[],files:[]};
+}
+async function parsePdf(file){
+ if(!window.pdfjsLib)throw new Error('Lecture PDF indisponible.');
+ pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+ const pdf=await pdfjsLib.getDocument({data:await file.arrayBuffer()}).promise,text=[];
+ for(let p=1;p<=pdf.numPages;p++){const page=await pdf.getPage(p),content=await page.getTextContent();text.push(content.items.map(x=>x.str).join(' '))}
+ const body=text.join('\n'),field=label=>body.match(new RegExp(`${label}\\s*[:#]?\\s*([^\\n]+)`,'i'))?.[1]||'';
+ const date=body.match(/Date\s*:\s*(\d{1,4}[/. -]\d{1,2}[/. -]\d{1,4})/i)?.[1]||'';
+ const client=body.match(/Client\s*:\s*(.*?)(?=\s+(?:T[eé]l|Date|Bon\s*N[°o]?)\s*:|$)/i)?.[1]||field('Client');
+ const no=body.match(/(?:Proforma\s*N[°o]?|Facture\s*N[°o]?)\s*[:#]?\s*([\w/-]+)/i)?.[1]||'';
+ return {client:cleanText(client),date:parseDate(date),no,lines:[]};
+}
+async function parseImport(file){
+ const ext=file.name.split('.').pop().toLowerCase();
+ if(ext==='json'){
+  const value=JSON.parse(await file.text()),list=Array.isArray(value)?value:Array.isArray(value.D)?value.D:[value];
+  if(value.CO){CO=value.CO;try{localStorage.setItem('co',JSON.stringify(CO))}catch(e){}}
+  if(value.OBJ){OBJ=+value.OBJ;try{localStorage.setItem('obj',OBJ)}catch(e){}}
+  return list.filter(x=>x&&Array.isArray(x.lines)).map(x=>invoiceFrom(x,file.name));
+ }
+ if(['xlsx','xls','xlsm','csv','ods'].includes(ext)){
+  const workbook=XLSX.read(await file.arrayBuffer(),{type:'array',cellDates:true}),sheet=workbook.Sheets[workbook.SheetNames[0]],parsed=parseSheet(XLSX.utils.sheet_to_json(sheet,{header:1,defval:''}));
+  return parsed?[invoiceFrom(parsed,file.name)]:[];
+ }
+ if(ext==='pdf')return [invoiceFrom(await parsePdf(file),file.name)];
+ return [];
+}
+async function loadInvoices(){
+ const {data,error}=await supabase.from('invoices').select('id,invoice').order('created_at',{ascending:false});if(error)throw error;
+ const invoices=(data||[]).map(row=>({...row.invoice,id:row.id,lines:Array.isArray(row.invoice?.lines)?row.invoice.lines:[]}));
+ known=Object.fromEntries(invoices.map(i=>[i.id,JSON.stringify(i)]));fbLoad(invoices);
+}
+window.sbSave=async invoices=>{
+ const wanted=new Set(invoices.map(i=>i.id)),changed=invoices.filter(i=>known[i.id]!==JSON.stringify(i));
+ if(changed.length){const {error}=await supabase.from('invoices').upsert(changed.map(invoice=>({id:invoice.id,client_email:invoice.clientEmail||null,invoice})),{onConflict:'id'});if(error)throw error}
+ const removed=Object.keys(known).filter(id=>!wanted.has(id));
+ if(removed.length){const {error}=await supabase.from('invoices').delete().in('id',removed);if(error)throw error}
+ known=Object.fromEntries(invoices.map(i=>[i.id,JSON.stringify(i)]));
+};
+window.shareInvoice=async id=>{
+ const invoice=D.find(item=>item.id===id),email=(invoice?.clientEmail||'').trim().toLowerCase();
+ if(!invoice)return;
+ if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){openEd(id);document.getElementById('clientEmail').focus();return}
+ invoice.clientEmail=email;
+ try{
+  await window.sbSave(D);
+  const link=new URL('client.html',location.href);link.searchParams.set('invoice',invoice.id);
+  const subject=`Accès à la facture ${invoice.no||invoice.date}`;
+  const body=`Bonjour ${invoice.client||''},\n\nVotre facture est disponible dans votre espace sécurisé :\n${link.href}\n\nConnectez-vous avec l'adresse ${email}.`;
+  say('La facture est autorisée pour '+email+'. Votre messagerie va s’ouvrir.');
+    location.href=`mailto:${email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+ }catch(error){say('Impossible de partager cette facture : '+(error.message||'vérifiez les règles SQL Supabase.'))}
+};
+window.openInvoiceFile=async encodedPath=>{
+ const tab=window.open('about:blank','_blank');
+ const {data,error}=await supabase.storage.from('invoice-files').createSignedUrl(decodeURIComponent(encodedPath),3600);
+ if(error){tab?.close();alert('Impossible d’ouvrir le document. Vérifiez les règles Storage.');return}
+ if(tab)tab.location=data.signedUrl;else location.href=data.signedUrl;
+};
+window.importInvoiceFiles=async files=>{
+ if(!files?.length)return;const button=document.getElementById('invoiceImport');button.disabled=true;
+ try{
+  for(const file of files){
+   if(file.size>50*1024*1024)throw new Error(`${file.name} dépasse la limite de 50 Mo.`);
+   let imported=await parseImport(file);
+   if(!imported.length)imported=[invoiceFrom(null,file.name)];
+   D.unshift(...imported);cur=imported[0].id;await window.sbSave(D);
+   const invoice=imported[0],safeName=file.name.replace(/[^a-zA-Z0-9._-]+/g,'_'),path=`${invoice.id}/${Date.now()}_${safeName}`;
+   const {error:uploadError}=await supabase.storage.from('invoice-files').upload(path,file,{contentType:file.type||'application/octet-stream',upsert:false});
+   if(uploadError)throw uploadError;
+   invoice.files=invoice.files||[];invoice.files.push({path,name:file.name});await window.sbSave(D);
+  }
+  render();say('Import terminé. Vérifiez les informations extraites avant d’envoyer la facture au client.');
+ }catch(error){say(`Import interrompu : ${error.message||'erreur Supabase'}`);render()}
+ finally{button.disabled=false}
+};
+async function handleAuth(user){
+ if(feed){supabase.removeChannel(feed);feed=null}known={};document.body.classList.toggle('in',!!user);if(!user)return;
+ if(!ADMINS.includes((user.email||'').toLowerCase())){location.replace('client.html');return}
+ $('who').textContent=user.email;
+ try{await loadInvoices();feed=supabase.channel('admin-invoices').on('postgres_changes',{event:'*',schema:'public',table:'invoices'},()=>loadInvoices().catch(()=>say('Impossible de recharger les factures.'))).subscribe()}
+ catch(error){$('amsg').textContent='Lecture impossible : vérifiez la configuration et les règles SQL Supabase.'}
+}
+$('gbtn').onclick=()=>supabase.auth.signInWithOAuth({provider:'google',options:{redirectTo:location.href.split('#')[0]}}).then(({error})=>{if(error)$('amsg').textContent='Connexion impossible : '+error.message});
+$('out').onclick=()=>supabase.auth.signOut();
+supabase.auth.onAuthStateChange((_event,session)=>setTimeout(()=>handleAuth(session?.user),0));
+</script></body></html>

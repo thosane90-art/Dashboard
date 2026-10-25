@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="fr"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Espace client</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+<style>
+:root{--bg:#f6f4ef;--card:#fff;--tx:#1d2a24;--mu:#6b7770;--ac:#0f6b4f;--ac2:#e8a33d;--bd:#e2ded4;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#121815;--card:#1b2420;--tx:#e9efe9;--mu:#93a39a;--ac:#3fbf93;--ac2:#e8a33d;--bd:#2c3832}}
+:root[data-theme="dark"]{--bg:#121815;--card:#1b2420;--tx:#e9efe9;--mu:#93a39a;--ac:#3fbf93;--ac2:#e8a33d;--bd:#2c3832}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif}
+header{padding:16px 20px;border-bottom:1px solid var(--bd)}h1{font:700 20px Georgia,serif;margin:0}header p{margin:2px 0 0;color:var(--mu)}
+main{max-width:1100px;margin:auto;padding:16px 20px}.card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:14px;margin-bottom:14px}
+h2{font:600 15px system-ui;margin:0 0 10px}.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:14px}
+.kpi small{color:var(--mu);display:block}.kpi strong{font-size:20px}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px}
+.cv{position:relative;height:250px}button{font:inherit;cursor:pointer;border:1px solid var(--bd);background:var(--card);color:var(--tx);border-radius:8px;padding:7px 12px}
+button.p{background:var(--ac);border-color:var(--ac);color:#fff}.tabs{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px}.tabs button.on{border-color:var(--ac);box-shadow:0 0 0 1px var(--ac)}
+.tw{overflow-x:auto}table{border-collapse:collapse;width:100%;min-width:520px}th,td{padding:6px 8px;border-bottom:1px solid var(--bd);text-align:left;white-space:nowrap}th{color:var(--mu);font-size:13px}
+td.n,th.n{text-align:right}tr.sec td{background:var(--bg);font-weight:700;color:var(--ac)}#msg{color:var(--mu);font-size:13px;min-height:18px}
+body:not(.in) header,body:not(.in) main{display:none}body.in #login{display:none}#login{max-width:380px;margin:18vh auto;text-align:center;padding:24px}#login button{font:inherit;padding:10px 18px}</style></head><body><div id="login"><h1 style="font:700 22px Georgia,serif">Factures proforma</h1><p style="color:var(--mu)">Connectez-vous avec votre compte Google pour continuer.</p><button class="p" id="gbtn">Se connecter avec Google</button><p id="amsg" style="color:#b3412f;font-size:13px"></p></div>
+<header style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap"><div><h1>Espace client</h1><p id="cn">Vos factures proforma</p></div><div><span id="who" style="color:var(--mu)"></span> <button id="out">Déconnexion</button></div></header><main id="v"></main>
+<script>
+let DATA={client:"",inv:[]};
+const dlh=async()=>{try{if(window.claude){const d=await claude.use('downloads');if(d)return d}}catch(e){}return{save:async({filename,data})=>{const a=document.createElement('a');a.href=URL.createObjectURL(data);a.download=filename;document.body.appendChild(a);a.click();a.remove()}}};
+const nl=n=>{n=Math.round(n);if(!n)return'zéro';const u='-,un,deux,trois,quatre,cinq,six,sept,huit,neuf,dix,onze,douze,treize,quatorze,quinze,seize,dix-sept,dix-huit,dix-neuf'.split(','),t=',,vingt,trente,quarante,cinquante,soixante'.split(',');
+ const b=(n,last)=>{if(n<20)return n?u[n]:'';let d=Math.floor(n/10),r=n%10;if(d<7)return r===0?t[d]:t[d]+(r===1?' et un':'-'+u[r]);if(d===7||d===9){const base=d===7?'soixante':'quatre-vingt',x=r+10;return d===7&&r===1?'soixante et onze':base+'-'+u[x]}return r?'quatre-vingt-'+u[r]:'quatre-vingt'+(last?'s':'')};
+ const k=(n,last)=>{const c=Math.floor(n/100),r=n%100;let s=c>1?u[c]+' cent'+(r===0&&last?'s':''):c===1?'cent':'';if(r)s+=(s?' ':'')+b(r,last);return s};
+ const M=Math.floor(n/1e6),K=Math.floor(n/1e3)%1e3,R=n%1e3,p=[];
+ if(M)p.push(M===1?'un million':k(M,true)+' millions');if(K)p.push(K===1?'mille':k(K,false)+' mille');if(R)p.push(k(R,true));return p.join(' ')};
+const lettres=m=>{const s=nl(m);return s[0].toUpperCase()+s.slice(1)+' francs CFA'};
+
+const SEC={pet:'Boissons PET',verre:'Boissons verre',biere:'Bières verre',negoce:'Négoce bière (canettes)'};
+const fmt=n=>Math.round(n).toLocaleString('fr-FR').replace(/[\u202f\u00a0]/g,' ');
+const hl=l=>l.q*l.c*l.f/10000,mt=l=>l.q*l.pr;
+const tot=(i,s)=>i.lines.filter(l=>!s||l.s===s).reduce((a,l)=>({m:a.m+mt(l),h:a.h+hl(l),q:a.q+l.q,c:a.c+l.q*l.cs}),{m:0,h:0,q:0,c:0});
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const dt=d=>new Date(d).toLocaleDateString('fr-FR');
+const css=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+let cur=0,ch=[],loaded=false;
+function render(){
+ if(!DATA.inv.length){document.getElementById('v').innerHTML='<div class="card">'+(loaded?'Aucune facture pour le moment.':'Chargement…')+'</div>';return}
+ if(cur>=DATA.inv.length)cur=0;const U=DATA.inv.map(x=>x.maj||'').sort().pop();
+ const I=DATA.inv,i=I[cur],T=tot(i),A=I.reduce((a,x)=>{const t=tot(x);return{m:a.m+t.m,q:a.q+t.q,h:a.h+t.h,c:a.c+t.c-(x.ret||0)}},{m:0,q:0,h:0,c:0});
+ let rows='';
+ for(const k in SEC){const ls=i.lines.filter(l=>l.s===k);if(!ls.length)continue;const t=tot(i,k);
+  rows+=`<tr class="sec"><td colspan="3">${SEC[k]}</td><td class="n">${fmt(t.q)}</td><td></td><td class="n">${fmt(t.m)}</td><td class="n">${t.h.toFixed(2)}</td></tr>`+ls.map(l=>`<tr><td>${esc(l.p)}</td><td>${l.f} cl</td><td>${l.c}</td><td class="n">${fmt(l.q)}</td><td class="n">${fmt(l.pr)}</td><td class="n">${fmt(mt(l))}</td><td class="n">${hl(l).toFixed(2)}</td></tr>`).join('')}
+ document.getElementById('v').innerHTML=`<p style="color:var(--mu);font-size:13px;margin:0 0 10px">${U?'Mis à jour le '+new Date(U).toLocaleString('fr-FR'):''}</p><div class="kpis"><div class="card kpi"><small>Factures</small><strong>${I.length}</strong></div><div class="card kpi"><small>Total TTC</small><strong>${fmt(A.m)}</strong></div><div class="card kpi"><small>Casiers/packs</small><strong>${fmt(A.q)}</strong></div><div class="card kpi"><small>Hectolitres</small><strong>${A.h.toFixed(1)}</strong></div><div class="card kpi"><small>Consigne due</small><strong>${fmt(A.c)}</strong></div></div>
+ <div class="tabs">${I.map((x,n)=>`<button class="${n===cur?'on':''}" onclick="cur=${n};render()">${x.no} · ${dt(x.date)}</button>`).join('')}</div>
+ <div class="card"><h2>Facture ${i.no} · ${dt(i.date)} · ${i.st||'brouillon'}${i.val?' · valable '+i.val+' jours':''}</h2><p style="color:var(--mu);margin:0 0 10px">${i.bn?'Bon N° '+esc(i.bn)+' · ':''}${i.im?'Véhicule '+esc(i.im)+' · ':''}Total TTC <b>${fmt(T.m)} FCFA</b> · Consigne due ${fmt(T.c-(i.ret||0))} FCFA</p><button class="p" onclick="pdf()">Télécharger le PDF</button> ${i.files&&i.files.length?i.files.map(f=>`<button onclick="openInvoiceFile('${encodeURIComponent(f.path)}')">Ouvrir ${esc(f.name)}</button>`).join(' '):''} <span id="msg"></span></div>
+ <div class="grid"><div class="card"><h2>Montant par section</h2><div class="cv"><canvas id="c1"></canvas></div></div><div class="card"><h2>Produits les plus commandés</h2><div class="cv"><canvas id="c2"></canvas></div></div></div>
+ <div class="card tw"><table><thead><tr><th>Produit</th><th>Format</th><th>Cond.</th><th class="n">Casiers</th><th class="n">Prix TTC</th><th class="n">Montant</th><th class="n">Hectos</th></tr></thead><tbody>${rows}<tr class="sec"><td colspan="3">TOTAL</td><td class="n">${fmt(T.q)}</td><td></td><td class="n">${fmt(T.m)}</td><td class="n">${T.h.toFixed(2)}</td></tr></tbody></table></div>
+ <div class="card"><small style="color:var(--mu)">Montant en lettres</small><br><b>${lettres(T.m)}</b></div>`;
+ ch.forEach(c=>c.destroy());const ac=css('--ac'),a2=css('--ac2'),tx=css('--mu'),bd=css('--bd'),ks=Object.keys(SEC).filter(k=>tot(i,k).q>0),top=[...i.lines].sort((a,b)=>mt(b)-mt(a)).slice(0,8),ax={ticks:{color:tx},grid:{color:bd}};
+ ch=[new Chart(c1,{type:'doughnut',data:{labels:ks.map(k=>SEC[k]),datasets:[{data:ks.map(k=>tot(i,k).m),backgroundColor:[ac,a2,'#6b8fd6','#b36bd6'],borderWidth:0}]},options:{maintainAspectRatio:false,plugins:{legend:{labels:{color:tx}}}}}),
+ new Chart(c2,{type:'bar',data:{labels:top.map(l=>l.p+' '+l.f),datasets:[{data:top.map(mt),backgroundColor:ac}]},options:{indexAxis:'y',maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:ax,y:{ticks:{color:tx},grid:{display:false}}}}})];
+}
+async function pdf(){
+ const i=DATA.inv[cur],T=tot(i),doc=new jspdf.jsPDF(),m=document.getElementById('msg');
+ doc.setFontSize(15);doc.text('FACTURE PROFORMA N° '+i.no,14,16);doc.setFontSize(10);doc.text('Client : '+DATA.client+'   Date : '+dt(i.date)+(i.bn?'   Bon N° : '+i.bn:''),14,24);
+ const body=[];for(const k in SEC){const ls=i.lines.filter(l=>l.s===k);if(!ls.length)continue;const t=tot(i,k);body.push([{content:SEC[k],colSpan:3,styles:{fontStyle:'bold',fillColor:[225,240,233]}},{content:fmt(t.q),styles:{fillColor:[225,240,233],halign:'right'}},'',{content:fmt(t.m),styles:{fillColor:[225,240,233],halign:'right'}},{content:t.h.toFixed(2),styles:{fillColor:[225,240,233],halign:'right'}}]);ls.forEach(l=>body.push([l.p,l.f+' cl',l.c,fmt(l.q),fmt(l.pr),fmt(mt(l)),hl(l).toFixed(2)]))}
+ body.push([{content:'TOTAL',colSpan:3,styles:{fontStyle:'bold'}},{content:fmt(T.q),styles:{fontStyle:'bold'}},'',{content:fmt(T.m),styles:{fontStyle:'bold'}},{content:T.h.toFixed(2),styles:{fontStyle:'bold'}}]);
+ doc.autoTable({startY:30,head:[['Produit','Format','Cond.','Casiers','Prix TTC','Montant','Hectos']],body,styles:{fontSize:8},headStyles:{fillColor:[15,107,79]},columnStyles:{3:{halign:'right'},4:{halign:'right'},5:{halign:'right'},6:{halign:'right'}}});
+ const y=doc.lastAutoTable.finalY+8;doc.setFontSize(9);doc.text('Consignation : '+fmt(T.c)+' FCFA',14,y);doc.text('Montant en lettres : '+lettres(T.m),14,y+7,{maxWidth:180});
+ try{const d=await dlh();if(!d)throw 0;await d.save({filename:i.no+'.pdf',data:doc.output('blob')});m.textContent='PDF prêt.'}catch(e){m.textContent=e&&e.code==='declined'?'Téléchargement annulé.':'Le téléchargement n’est pas disponible dans cette vue.'}
+}
+render();
+function setInv(a){loaded=true;DATA.inv=a.sort((x,y)=>x.date<y.date?-1:1);if(a[0]){DATA.client=a[0].client;document.getElementById('cn').textContent=a[0].client+' · vos factures proforma'}render()}
+function setErr(t){loaded=true;document.getElementById('v').innerHTML='<div class="card">'+t+'</div>'}
+</script>
+<script type="module">
+import {supabase} from './supabase.js';
+const $=i=>document.getElementById(i);let feed;
+async function loadInvoices(){
+ const invoiceId=new URLSearchParams(location.search).get('invoice');
+ if(!invoiceId){setErr('Lien de facture manquant. Demandez à votre contact de vous renvoyer son e-mail de partage.');return}
+ const {data,error}=await supabase.from('invoices').select('id,invoice').eq('id',invoiceId).limit(1);
+ if(error)throw error;setInv((data||[]).map(row=>({...row.invoice,id:row.id})));
+}
+window.openInvoiceFile=async encodedPath=>{
+ const tab=window.open('about:blank','_blank');
+ const {data,error}=await supabase.storage.from('invoice-files').createSignedUrl(decodeURIComponent(encodedPath),3600);
+ if(error){tab?.close();alert('Impossible d’ouvrir le document.');return}
+ if(tab)tab.location=data.signedUrl;else location.href=data.signedUrl;
+};
+async function handleAuth(user){
+ if(feed){supabase.removeChannel(feed);feed=null}document.body.classList.toggle('in',!!user);if(!user)return;$('who').textContent=user.email;
+ try{await loadInvoices();feed=supabase.channel('client-invoices').on('postgres_changes',{event:'*',schema:'public',table:'invoices'},()=>loadInvoices().catch(()=>setErr('Impossible de charger vos factures.'))).subscribe()}
+ catch(error){setErr('Impossible de charger vos factures. Vérifiez les règles SQL Supabase.')}
+}
+$('gbtn').onclick=()=>supabase.auth.signInWithOAuth({provider:'google',options:{redirectTo:location.href.split('#')[0]}}).then(({error})=>{if(error)$('amsg').textContent='Connexion impossible : '+error.message});
+$('out').onclick=()=>supabase.auth.signOut();
+supabase.auth.onAuthStateChange((_event,session)=>setTimeout(()=>handleAuth(session?.user),0));
+</script></body></html>
