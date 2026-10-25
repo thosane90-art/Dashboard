@@ -37,12 +37,16 @@ label{font-size:12px;color:var(--mu);display:block}
 input,select{width:100%;font:inherit;padding:6px 8px;border:1px solid var(--bd);border-radius:6px;background:var(--bg);color:var(--tx)}
 td input,td select{min-width:70px}
 #msg{color:var(--mu);font-size:13px;min-height:18px}
-body:not(.in) header,body:not(.in) main{display:none}body.in #login{display:none}#login{max-width:380px;margin:18vh auto;text-align:center;padding:24px}#login button{font:inherit;padding:10px 18px}</style></head><body><div id="login"><h1 style="font:700 22px Georgia,serif">Factures proforma</h1><p style="color:var(--mu)">Connectez-vous avec votre compte Google pour continuer.</p><button class="p" id="gbtn">Se connecter avec Google</button><p id="amsg" style="color:#b3412f;font-size:13px"></p></div>
+body:not(.in) header,body:not(.in) main,body:not(.in) #notes-area{display:none}body.in #login{display:none}#login{max-width:380px;margin:18vh auto;text-align:center;padding:24px}#login button{font:inherit;padding:10px 18px}
+#notes-area{max-width:1260px;margin:0 auto 16px;padding:0 20px}.notes-card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:14px}.notes-entry{display:flex;gap:8px;align-items:end}.notes-entry label{flex:1}.notes-entry button{flex:0 0 auto}.note-list{padding-left:20px}.note-list li{margin:8px 0}.note-list small{display:block;color:var(--mu)}#notes-message{min-height:18px;color:var(--mu);font-size:13px}
+@media(max-width:820px){#notes-area{padding:0 20px}}
+</style></head><body><div id="login"><h1 style="font:700 22px Georgia,serif">Factures proforma</h1><p style="color:var(--mu)">Connectez-vous avec votre compte Google pour continuer.</p><button class="p" id="gbtn">Se connecter avec Google</button><p id="amsg" style="color:#b3412f;font-size:13px"></p></div>
 <header><h1>Factures proforma</h1><div style="display:flex;gap:8px;flex-wrap:wrap"><button id="tf" onclick="tab='fact';render()">Factures</button><button id="ts" onclick="tab='stats';render()">Statistiques</button><button onclick="bk()">Sauvegarder</button><button onclick="imp.click()">Restaurer</button><button onclick="cfg()">Société</button><input type="file" id="imp" accept=".json" hidden onchange="rs(this)"><button onclick="document.getElementById('invoiceImport').click()">Importer fichier</button><input type="file" id="invoiceImport" multiple hidden onchange="importInvoiceFiles(this.files);this.value=''"><button class="p" onclick="tab='fact';render();openEd()">+ Nouvelle facture</button><span id="who" style="color:var(--mu);align-self:center"></span><button id="out">Déconnexion</button></div></header>
 <main>
 <aside class="card"><h2>Mes factures</h2><input id="srch" placeholder="Rechercher client, n°, date…" oninput="render()" style="margin-bottom:8px"><div id="list"></div></aside>
 <section id="view"></section>
 </main>
+<section id="notes-area" hidden aria-labelledby="notes-title"><div class="notes-card"><h2 id="notes-title">Mes notes</h2><form id="note-form"><div class="notes-entry"><label for="note-input">Écrire une note<input id="note-input" type="text" maxlength="500" placeholder="Écrire une note" required></label><button class="p" type="submit">Enregistrer</button></div></form><p id="notes-message" role="status" aria-live="polite"></p><ul id="notes-list" class="note-list"></ul></div></section>
 <dialog id="ed"></dialog>
 <script>
 const SEC={pet:'Boissons PET',verre:'Boissons verre',biere:'Bières verre',negoce:'Négoce bière (canettes)'};
@@ -282,7 +286,7 @@ render();
 </script>
 <script type="module">
 import {supabase,ADMINS} from './supabase.js';
-const $=i=>document.getElementById(i);let known={},feed;
+const $=i=>document.getElementById(i);let known={},feed,activeUserId=null;
 const uid=()=>`i${Date.now()}${Math.random().toString(36).slice(2,8)}`;
 const cleanText=s=>String(s??'').trim();
 const normalized=s=>cleanText(s).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,' ').trim();
@@ -391,12 +395,33 @@ window.importInvoiceFiles=async files=>{
  finally{button.disabled=false}
 };
 async function handleAuth(user){
- if(feed){supabase.removeChannel(feed);feed=null}known={};document.body.classList.toggle('in',!!user);if(!user)return;
+ if(feed){supabase.removeChannel(feed);feed=null}known={};activeUserId=null;$('notes-area').hidden=true;$('notes-list').replaceChildren();$('notes-message').textContent='';document.body.classList.toggle('in',!!user);if(!user)return;
  if(!ADMINS.includes((user.email||'').toLowerCase())){location.replace('client.html');return}
- $('who').textContent=user.email;
+ activeUserId=user.id;$('who').textContent=user.email;$('notes-area').hidden=false;
  try{await loadInvoices();feed=supabase.channel('admin-invoices').on('postgres_changes',{event:'*',schema:'public',table:'invoices'},()=>loadInvoices().catch(()=>say('Impossible de recharger les factures.'))).subscribe()}
  catch(error){$('amsg').textContent='Lecture impossible : vérifiez la configuration et les règles SQL Supabase.'}
+ try{await loadNotes(user.id)}catch(error){$('notes-message').textContent='Impossible de charger les notes : '+(error.message||'vérifiez la configuration SQL Supabase.')}
 }
+async function loadNotes(userId){
+ const {data,error}=await supabase.from('notes').select('id,content,created_at').eq('user_id',userId).order('created_at',{ascending:false});
+ if(error)throw error;
+ const list=$('notes-list');list.replaceChildren();
+ if(!data.length){const empty=document.createElement('li');empty.textContent='Aucune note pour le moment.';list.appendChild(empty);return}
+ for(const note of data){
+  const item=document.createElement('li'),content=document.createElement('span'),date=document.createElement('small');
+  content.textContent=note.content;date.textContent=new Date(note.created_at).toLocaleString('fr-FR');item.append(content,date);list.appendChild(item);
+ }
+}
+$('note-form').addEventListener('submit',async event=>{
+ event.preventDefault();const input=$('note-input'),content=input.value.trim();
+ if(!content||!activeUserId)return;
+ const button=$('note-form').querySelector('button[type="submit"]');button.disabled=true;$('notes-message').textContent='Enregistrement…';
+ try{
+  const {error}=await supabase.from('notes').insert({user_id:activeUserId,content});if(error)throw error;
+  input.value='';$('notes-message').textContent='Note enregistrée.';await loadNotes(activeUserId);
+ }catch(error){$('notes-message').textContent='Impossible d’enregistrer la note : '+(error.message||'vérifiez les règles SQL Supabase.')}
+ finally{button.disabled=false}
+});
 $('gbtn').onclick=()=>supabase.auth.signInWithOAuth({provider:'google',options:{redirectTo:location.href.split('#')[0]}}).then(({error})=>{if(error)$('amsg').textContent='Connexion impossible : '+error.message});
 $('out').onclick=()=>supabase.auth.signOut();
 supabase.auth.onAuthStateChange((_event,session)=>setTimeout(()=>handleAuth(session?.user),0));
